@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+
+enum ItemStatus {
+  PENDING
+  PICKED_UP
+  OK
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?  @unique
+  createdAt DateTime @default(now())
+
+  requests  MaterialRequest[]
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  requests  MaterialRequest[]
+}
+
+model Material {
+  id          String   @id @default(cuid())
+  sapPn       String   @unique
+  name        String
+  description String?
+  unit        String?  // ex: "ea", "ft", "box"
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  requestItems MaterialRequestItem[]
+
+  @@index([name])
+}
+
+model MaterialRequest {
+  id          String   @id @default(cuid())
+  requestCode String   @unique // ex: WF-000124
+  date        DateTime @default(now())
+
+  projectSite String
+  requestedBy String
+
+  userId      String?
+  teamId      String?
+
+  user        User? @relation(fields: [userId], references: [id])
+  team        Team? @relation(fields: [teamId], references: [id])
+
+  items       MaterialRequestItem[]
+
+  createdAt   DateTime @default(now())
+
+  @@index([date])
+  @@index([projectSite])
+}
+
+model MaterialRequestItem {
+  id         String @id @default(cuid())
+
+  itemNumber Int
+  quantity   Int
+  notes      String?
+  status     ItemStatus @default(PENDING)
+
+  requestId  String
+  request    MaterialRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id])
+
+  @@unique([requestId, itemNumber])
+  @@index([materialId])
+}
