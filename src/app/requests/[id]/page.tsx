@@ -55,9 +55,19 @@ export default async function RequestDetailPage({ params }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Material Request</h1>
-          <p className="text-sm text-muted-foreground">
-            {request.requestCode}
-          </p>
+
+          {/* === Request Code with subtle neon underline === */}
+          <div className="relative inline-block mt-1">
+            <p className="font-mono text-sm text-muted-foreground">
+              {request.requestCode}
+            </p>
+            <span
+              aria-hidden
+              className="absolute left-0 -bottom-1 h-[2px] w-full rounded-full
+                         bg-emerald-400/80
+                         shadow-[0_0_10px_rgba(57,255,20,0.35)]"
+            />
+          </div>
         </div>
 
         {/* ===== BUTTONS BLOCK ===== */}
@@ -145,7 +155,7 @@ export default async function RequestDetailPage({ params }: Props) {
                       <Badge
                         variant={
                           it.status === "COMPLETE"
-                            ? "default"
+                            ? "success"
                             : "secondary"
                         }
                       >
