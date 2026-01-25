@@ -11,8 +11,9 @@ datasource db {
 enum ItemStatus {
   PENDING
   PICKED_UP
-  OK
+  COMPLETE
 }
+
 
 model User {
   id        String   @id @default(cuid())
