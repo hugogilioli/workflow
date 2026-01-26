@@ -15,14 +15,15 @@ async function main() {
   const adminPasswordHash = await bcrypt.hash("ChangeMe123!", 10);
 
   const adminUser = await prisma.user.upsert({
-    where: { email: "admin@workflow.local" },
-    update: {},
-    create: {
-      name: "Admin",
-      email: "admin@workflow.local",
-      passwordHash: adminPasswordHash,
-    },
-  });
+  where: { email: "admin@workflow.local" },
+  update: { role: "ADMIN" },
+  create: {
+    name: "Admin",
+    email: "admin@workflow.local",
+    passwordHash: adminPasswordHash,
+    role: "ADMIN",
+  },
+});
 
   console.log("✅ User seeded:", adminUser.email);
 

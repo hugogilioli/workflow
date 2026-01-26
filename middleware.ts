@@ -2,12 +2,14 @@ import { auth } from "@/auth";
 import type { NextRequest } from "next/server";
 
 export default auth((req: NextRequest) => {
-  const isLoggedIn = !!(req as any).auth;
+  const session = (req as any).auth;
+  const isLoggedIn = !!session;
   const pathname = req.nextUrl.pathname;
 
   const isProtected =
     pathname.startsWith("/requests") ||
-    pathname.startsWith("/materials");
+    pathname.startsWith("/materials") ||
+    pathname.startsWith("/admin");
 
   const isAuthPage = pathname.startsWith("/login");
 
@@ -19,6 +21,14 @@ export default auth((req: NextRequest) => {
 
   if (isAuthPage && isLoggedIn) {
     return Response.redirect(new URL("/requests", req.nextUrl.origin));
+  }
+
+  // Admin-only area
+  if (pathname.startsWith("/admin")) {
+    const role = session?.user?.role;
+    if (role !== "ADMIN") {
+      return Response.redirect(new URL("/requests", req.nextUrl.origin));
+    }
   }
 
   return;
