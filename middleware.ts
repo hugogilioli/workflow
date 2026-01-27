@@ -1,39 +1,48 @@
 import { auth } from "@/auth";
+import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export default auth((req: NextRequest) => {
   const session = (req as any).auth;
   const isLoggedIn = !!session;
-  const pathname = req.nextUrl.pathname;
 
-  const isProtected =
-    pathname.startsWith("/requests") ||
-    pathname.startsWith("/materials") ||
-    pathname.startsWith("/admin");
+  const { nextUrl } = req;
+  const pathname = nextUrl.pathname;
 
-  const isAuthPage = pathname.startsWith("/login");
+  const isPublic =
+    pathname === "/login" ||
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/internal") ||
+    pathname.startsWith("/_next") ||
+    pathname === "/favicon.ico";
 
-  if (isProtected && !isLoggedIn) {
-    const url = new URL("/login", req.nextUrl.origin);
-    url.searchParams.set("callbackUrl", pathname);
-    return Response.redirect(url);
+  if (!isLoggedIn && !isPublic) {
+    const url = nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("callbackUrl", `${nextUrl.pathname}${nextUrl.search}`);
+    return NextResponse.redirect(url);
   }
 
-  if (isAuthPage && isLoggedIn) {
-    return Response.redirect(new URL("/requests", req.nextUrl.origin));
+  if (isLoggedIn && pathname === "/login") {
+    const url = nextUrl.clone();
+    url.pathname = "/requests";
+    url.search = "";
+    return NextResponse.redirect(url);
   }
 
-  // Admin-only area
   if (pathname.startsWith("/admin")) {
     const role = session?.user?.role;
     if (role !== "ADMIN") {
-      return Response.redirect(new URL("/requests", req.nextUrl.origin));
+      const url = nextUrl.clone();
+      url.pathname = "/requests";
+      url.search = "";
+      return NextResponse.redirect(url);
     }
   }
 
-  return;
+  return NextResponse.next();
 });
 
 export const config = {
-  matcher: ["/((?!_next|favicon.ico|api).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

@@ -8,7 +8,12 @@ export function SignOutButton() {
     <Button
       variant="outline"
       type="button"
-      onClick={() => signOut({ callbackUrl: "/login" })}
+      onClick={() =>
+        signOut({
+          redirect: true,
+          callbackUrl: `${window.location.origin}/login`,
+        })
+      }
     >
       Sign out
     </Button>
