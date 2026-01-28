@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 
@@ -11,54 +11,62 @@ import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   const router = useRouter();
-  const sp = useSearchParams();
-  const callbackUrl = sp.get("callbackUrl") ?? "/requests";
+  const searchParams = useSearchParams();
+
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
+
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-
-    const res = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-      callbackUrl,
-    });
-
-    setLoading(false);
-
-    if (!res || res.error) {
-      alert("Invalid credentials.");
-      return;
-    }
-
-    router.push(res.url ?? callbackUrl);
-    router.refresh();
-  }
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center p-6">
+    <div className="min-h-[70vh] flex items-center justify-center p-6">
       <Card className="w-full max-w-md rounded-2xl">
-        <CardContent className="p-6 space-y-5">
+        <CardContent className="p-6 space-y-6">
           <div>
-            <h1 className="text-2xl font-semibold">Sign in</h1>
+            <h1 className="text-2xl font-semibold">WorkFlow</h1>
             <p className="text-sm text-muted-foreground">
-              Use your WorkFlow credentials.
+              Sign in to continue.
             </p>
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setError(null);
+
+              startTransition(async () => {
+                const res = await signIn("credentials", {
+                  email,
+                  password,
+                  redirect: false, // ✅ we'll redirect manually (most reliable)
+                  callbackUrl,
+                });
+
+                // NextAuth returns { ok, error, url }
+                if (!res || res.error) {
+                  setError("Invalid email or password.");
+                  return;
+                }
+
+                // ✅ Go to callbackUrl (or /requests)
+                router.push(res.url ?? callbackUrl);
+                router.refresh();
+              });
+            }}
+          >
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@workflow.local"
+                placeholder="you@company.com"
+                required
               />
             </div>
 
@@ -67,14 +75,20 @@ export default function LoginPage() {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                required
               />
             </div>
 
-            <Button className="w-full" disabled={loading} type="submit">
-              {loading ? "Signing in..." : "Sign in"}
+            {error ? (
+              <p className="text-sm text-red-600">{error}</p>
+            ) : null}
+
+            <Button type="submit" className="w-full" disabled={pending}>
+              {pending ? "Signing in..." : "Sign In"}
             </Button>
           </form>
         </CardContent>

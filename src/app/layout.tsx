@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AppHeader } from "@/components/app-header";
+import AppHeader from "@/components/app-header";
 
 export const metadata: Metadata = {
   title: "WorkFlow",
-  description: "Material requests made simple.",
+  description: "Materials & Requests Management System",
 };
 
 export default function RootLayout({
@@ -13,10 +13,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <AppHeader />
-        <main>{children}</main>
+        {children}
       </body>
     </html>
   );
