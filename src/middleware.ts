@@ -3,9 +3,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export default auth((req: NextRequest) => {
+  // ✅ DEBUG (depois você remove)
+  console.log("MIDDLEWARE HIT:", req.nextUrl.pathname, "logged:", !!(req as any).auth);
+
   const session = (req as any).auth;
   const isLoggedIn = !!session;
-
   const { nextUrl } = req;
   const pathname = nextUrl.pathname;
 
@@ -30,19 +32,9 @@ export default auth((req: NextRequest) => {
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/admin")) {
-    const role = session?.user?.role;
-    if (role !== "ADMIN") {
-      const url = nextUrl.clone();
-      url.pathname = "/requests";
-      url.search = "";
-      return NextResponse.redirect(url);
-    }
-  }
-
   return NextResponse.next();
 });
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api/auth|api/internal|login|_next/static|_next/image|favicon.ico).*)"],
 };
