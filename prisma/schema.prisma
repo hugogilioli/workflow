@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
@@ -7,6 +7,11 @@ datasource db {
   provider = "sqlite"
 }
 
+enum Role {
+  VIEWER
+  OPERATOR
+  ADMIN
+}
 
 enum ItemStatus {
   PENDING
@@ -14,9 +19,17 @@ enum ItemStatus {
   COMPLETE
 }
 
-enum UserRole {
-  ADMIN
-  USER
+enum CalcBasis {
+  FIBER_FT
+  STRAND_FT
+  TOTAL_FT
+}
+
+enum CalcRounding {
+  CEIL
+  ROUND
+  FLOOR
+  NONE
 }
 
 model User {
@@ -24,19 +37,30 @@ model User {
   name         String
   email        String   @unique
   passwordHash String
-  role         UserRole @default(USER)
+  role         Role     @default(OPERATOR)
   createdAt    DateTime @default(now())
 
-  requests     MaterialRequest[]
+  // ✅ opposite relation exists in MaterialRequest.user
+  requests MaterialRequest[]
 }
-
 
 model Team {
   id        String   @id @default(cuid())
   name      String
   createdAt DateTime @default(now())
 
-  requests  MaterialRequest[]
+  requests MaterialRequest[]
+}
+
+model ProjectSite {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  lastFiberFt  Float?
+  lastStrandFt Float?
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  requests MaterialRequest[]
 }
 
 model Material {
@@ -44,51 +68,71 @@ model Material {
   sapPn       String   @unique
   name        String
   description String?
-  unit        String?  // ex: "ea", "ft", "box"
+  unit        String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
 
-  requestItems MaterialRequestItem[]
+  // ✅ calc rule (optional)
+  calcBasis    CalcBasis?
+  calcFactor   Float?
+  calcRounding CalcRounding @default(CEIL)
 
-  @@index([name])
+  requestItems MaterialRequestItem[]
 }
 
 model MaterialRequest {
   id          String   @id @default(cuid())
-  requestCode String   @unique // ex: WF-000124
-  date        DateTime @default(now())
-
+  requestCode String   @unique
   projectSite String
   requestedBy String
-
-  userId      String?
-  teamId      String?
-
-  user        User? @relation(fields: [userId], references: [id])
-  team        Team? @relation(fields: [teamId], references: [id])
-
-  items       MaterialRequestItem[]
-
+  date        DateTime
   createdAt   DateTime @default(now())
 
-  @@index([date])
-  @@index([projectSite])
+  // ✅ feet persisted
+  fiberFt  Float?
+  strandFt Float?
+
+  // ✅ creator user (opposite of User.requests)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  // ✅ optional normalized project site
+  projectSiteRefId String?
+  projectSiteRef   ProjectSite? @relation(fields: [projectSiteRefId], references: [id])
+
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id])
+
+  items MaterialRequestItem[]
 }
 
 model MaterialRequestItem {
-  id         String @id @default(cuid())
+  id        String          @id @default(cuid())
+  requestId String
+  request   MaterialRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id])
 
   itemNumber Int
   quantity   Int
   notes      String?
   status     ItemStatus @default(PENDING)
+}
 
-  requestId  String
-  request    MaterialRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+model AuditLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
 
-  materialId String
-  material   Material @relation(fields: [materialId], references: [id])
+  userId     String?
+  userEmail  String?
+  action     String
+  entityType String
+  entityId   String?
+  message    String
+  metaJson   String?
 
-  @@unique([requestId, itemNumber])
-  @@index([materialId])
+  @@index([createdAt])
+  @@index([action])
+  @@index([entityType])
 }

@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
+
+import { logAudit } from "@/lib/audit";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +15,6 @@ type ActionResult = { ok: true } | { ok: false; message: string };
 export default async function UsersPage() {
   const session = await auth();
 
-  // ✅ optional guard (if you want Users page admin-only)
   if (!session?.user || (session.user as any).role !== "ADMIN") {
     return (
       <div className="mx-auto max-w-5xl p-6">
@@ -39,13 +41,12 @@ export default async function UsersPage() {
     if (!session?.user) return { ok: false, message: "Not authenticated." };
     if ((session.user as any).role !== "ADMIN") return { ok: false, message: "Admin only." };
 
-    const adminId = (session.user as any).id as string;
+    const adminId = (session.user as any).id as string | undefined;
     if (!adminId) return { ok: false, message: "Session missing user id." };
 
-    // ✅ verify admin password
     const admin = await prisma.user.findUnique({
       where: { id: adminId },
-      select: { passwordHash: true, role: true },
+      select: { passwordHash: true, role: true, email: true },
     });
 
     if (!admin || admin.role !== "ADMIN") {
@@ -55,16 +56,15 @@ export default async function UsersPage() {
     const ok = await bcrypt.compare(adminPassword, admin.passwordHash);
     if (!ok) return { ok: false, message: "Invalid admin password." };
 
-    // ✅ safety: cannot delete yourself
     if (userId === adminId) {
       return { ok: false, message: "You cannot delete your own account." };
     }
 
-    // ✅ safety: cannot delete the last admin
     const target = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true },
+      select: { role: true, email: true },
     });
+
     if (!target) return { ok: false, message: "User not found." };
 
     if (target.role === "ADMIN") {
@@ -75,6 +75,15 @@ export default async function UsersPage() {
     }
 
     await prisma.user.delete({ where: { id: userId } });
+
+    await logAudit({
+      action: "DELETE_USER",
+      entityType: "USER",
+      entityId: userId,
+      message: `User deleted: ${target.email ?? userId}`,
+      userId: adminId,
+      userEmail: admin.email ?? null,
+    });
 
     revalidatePath("/users");
     return { ok: true };
@@ -90,9 +99,15 @@ export default async function UsersPage() {
           </p>
         </div>
 
-        <Button variant="outline" asChild>
-          <a href="/requests">Back</a>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/">Back</Link>
+          </Button>
+
+          <Button asChild>
+            <Link href="/users/new">Add User</Link>
+          </Button>
+        </div>
       </div>
 
       <Card className="rounded-2xl">
@@ -102,11 +117,12 @@ export default async function UsersPage() {
               <tr>
                 <th className="text-left px-3 py-2">Name</th>
                 <th className="text-left px-3 py-2">Email</th>
-                <th className="text-left px-3 py-2 w-[120px]">Role</th>
+                <th className="text-left px-3 py-2 w-[140px]">Role</th>
                 <th className="text-left px-3 py-2 w-[160px]">Created</th>
                 <th className="text-right px-3 py-2 w-[160px]">Actions</th>
               </tr>
             </thead>
+
             <tbody>
               {users.map((u) => (
                 <tr key={u.id} className="border-t">
@@ -135,10 +151,7 @@ export default async function UsersPage() {
 
               {users.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="px-3 py-10 text-center text-sm text-muted-foreground"
-                  >
+                  <td colSpan={5} className="px-3 py-10 text-center text-sm text-muted-foreground">
                     No users found.
                   </td>
                 </tr>

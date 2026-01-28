@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
+import { logAudit } from "@/lib/audit";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +28,9 @@ export default async function RequestDetailPage({ params }: Props) {
 
   if (!request) return notFound();
 
+  // ✅ capture safe primitive for UI only (TS-friendly)
+  const requestCode = request.requestCode;
+
   async function deleteRequest(adminPassword: string): Promise<ActionResult> {
     "use server";
 
@@ -40,7 +44,7 @@ export default async function RequestDetailPage({ params }: Props) {
 
     const admin = await prisma.user.findUnique({
       where: { id: adminId },
-      select: { passwordHash: true, role: true },
+      select: { passwordHash: true, role: true, email: true },
     });
 
     if (!admin || admin.role !== "ADMIN")
@@ -49,7 +53,22 @@ export default async function RequestDetailPage({ params }: Props) {
     const ok = await bcrypt.compare(adminPassword, admin.passwordHash);
     if (!ok) return { ok: false, message: "Invalid admin password." };
 
+    // ✅ read requestCode again inside action (no closure)
+    const found = await prisma.materialRequest.findUnique({
+      where: { id },
+      select: { requestCode: true },
+    });
+
     await prisma.materialRequest.delete({ where: { id } });
+
+    await logAudit({
+      action: "DELETE_REQUEST",
+      entityType: "REQUEST",
+      entityId: id,
+      message: `Request ${found?.requestCode ?? id} deleted`,
+      userId: adminId,
+      userEmail: admin.email ?? null,
+    });
 
     revalidatePath("/requests");
     return { ok: true };
@@ -62,9 +81,7 @@ export default async function RequestDetailPage({ params }: Props) {
           <h1 className="text-2xl font-semibold">Material Request</h1>
 
           <div className="relative inline-block mt-1">
-            <p className="font-mono text-sm text-muted-foreground">
-              {request.requestCode}
-            </p>
+            <p className="font-mono text-sm text-muted-foreground">{requestCode}</p>
             <span
               aria-hidden
               className="absolute left-0 -bottom-1 h-[2px] w-full rounded-full bg-emerald-400/80 shadow-[0_0_10px_rgba(57,255,20,0.35)]"
@@ -77,7 +94,6 @@ export default async function RequestDetailPage({ params }: Props) {
             <Link href="/requests">Back</Link>
           </Button>
 
-          {/* Export Excel is allowed for any user */}
           <Button variant="outline" asChild>
             <Link href={`/requests/${request.id}/export/excel`}>Export Excel</Link>
           </Button>
