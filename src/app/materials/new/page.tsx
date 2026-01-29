@@ -1,45 +1,36 @@
+"use client";
+
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect } from "react";
+
+import { createMaterialAction } from "@/app/materials/actions";
+import type { ActionResult } from "@/lib/action-result";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-async function createMaterial(formData: FormData) {
-  "use server";
-
-  const sapPn = String(formData.get("sapPn") ?? "").trim();
-  const name = String(formData.get("name") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  const unit = String(formData.get("unit") ?? "").trim();
-
-  if (!sapPn || !name) {
-    throw new Error("SAP PN and Name are required.");
-  }
-
-  await prisma.material.create({
-    data: {
-      sapPn,
-      name,
-      description: description || null,
-      unit: unit || null,
-      isActive: true,
-    },
-  });
-
-  redirect("/materials");
-}
+const initialState: ActionResult | null = null;
 
 export default function NewMaterialPage() {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(createMaterialAction, initialState);
+
+  useEffect(() => {
+    if (state?.ok) {
+      router.push("/materials");
+      router.refresh();
+    }
+  }, [state, router]);
+
   return (
     <div className="mx-auto max-w-2xl p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Add Material</h1>
-          <p className="text-sm text-muted-foreground">
-            Create a new item in your catalog.
-          </p>
+          <p className="text-sm text-muted-foreground">Create a new item in your catalog.</p>
         </div>
         <Button variant="outline" asChild>
           <Link href="/materials">Back</Link>
@@ -48,7 +39,13 @@ export default function NewMaterialPage() {
 
       <Card className="rounded-2xl">
         <CardContent className="p-6">
-          <form action={createMaterial} className="space-y-5">
+          <form action={formAction} className="space-y-5">
+            {state && !state.ok ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {state.message}
+              </div>
+            ) : null}
+
             <div className="space-y-2">
               <Label htmlFor="sapPn">SAP PN</Label>
               <Input id="sapPn" name="sapPn" placeholder="e.g. 8473921" />
@@ -70,7 +67,9 @@ export default function NewMaterialPage() {
             </div>
 
             <div className="pt-2 flex gap-3">
-              <Button type="submit">Save</Button>
+              <Button type="submit" disabled={pending}>
+                {pending ? "Saving..." : "Save"}
+              </Button>
               <Button type="button" variant="outline" asChild>
                 <Link href="/materials">Cancel</Link>
               </Button>
