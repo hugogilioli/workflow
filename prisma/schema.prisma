@@ -13,6 +13,12 @@ enum Role {
   ADMIN
 }
 
+enum UserRole {
+  ADMIN
+  USER
+  OPERATOR
+}
+
 enum ItemStatus {
   PENDING
   PICKED_UP
