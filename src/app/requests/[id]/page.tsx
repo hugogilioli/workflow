@@ -1,19 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { revalidatePath } from "next/cache";
-import bcrypt from "bcryptjs";
-
 import { prisma } from "@/lib/db";
-import { auth } from "@/auth";
-import { logAudit } from "@/lib/audit";
+import { revalidatePath } from "next/cache";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AdminConfirmDeleteButton } from "@/components/admin-confirm-delete-button";
+
+import { AdminConfirmButton, type AdminActionResult } from "@/components/admin-confirm-button";
 
 type Props = { params: Promise<{ id: string }> };
-type ActionResult = { ok: true } | { ok: false; message: string };
+
 
 export default async function RequestDetailPage({ params }: Props) {
   const { id } = await params;
@@ -22,56 +19,30 @@ export default async function RequestDetailPage({ params }: Props) {
     where: { id },
     include: {
       team: true,
-      items: { include: { material: true }, orderBy: { itemNumber: "asc" } },
+      items: {
+        include: { material: true },
+        orderBy: { itemNumber: "asc" },
+      },
     },
   });
 
   if (!request) return notFound();
 
-  // ✅ capture safe primitive for UI only (TS-friendly)
-  const requestCode = request.requestCode;
-
-  async function deleteRequest(adminPassword: string): Promise<ActionResult> {
+  async function deleteRequestAction(requestId: string, adminPassword: string): Promise<AdminActionResult> {
     "use server";
 
-    const session = await auth();
-    if (!session?.user) return { ok: false, message: "Not authenticated." };
-    if ((session.user as any).role !== "ADMIN")
-      return { ok: false, message: "Admin only." };
+    if (!adminPassword || adminPassword !== process.env.ADMIN_PASSWORD) {
+      return { ok: false, message: "Invalid admin password." };
+    }
 
-    const adminId = (session.user as any).id as string | undefined;
-    if (!adminId) return { ok: false, message: "Session missing user id." };
-
-    const admin = await prisma.user.findUnique({
-      where: { id: adminId },
-      select: { passwordHash: true, role: true, email: true },
-    });
-
-    if (!admin || admin.role !== "ADMIN")
-      return { ok: false, message: "Admin session invalid." };
-
-    const ok = await bcrypt.compare(adminPassword, admin.passwordHash);
-    if (!ok) return { ok: false, message: "Invalid admin password." };
-
-    // ✅ read requestCode again inside action (no closure)
-    const found = await prisma.materialRequest.findUnique({
-      where: { id },
-      select: { requestCode: true },
-    });
-
-    await prisma.materialRequest.delete({ where: { id } });
-
-    await logAudit({
-      action: "DELETE_REQUEST",
-      entityType: "REQUEST",
-      entityId: id,
-      message: `Request ${found?.requestCode ?? id} deleted`,
-      userId: adminId,
-      userEmail: admin.email ?? null,
-    });
-
-    revalidatePath("/requests");
-    return { ok: true };
+    try {
+      await prisma.materialRequest.delete({ where: { id: requestId } });
+      revalidatePath("/requests");
+      return { ok: true };
+    } catch (e) {
+      console.error("delete request error:", e);
+      return { ok: false, message: "Unable to delete this request." };
+    }
   }
 
   return (
@@ -80,8 +51,9 @@ export default async function RequestDetailPage({ params }: Props) {
         <div>
           <h1 className="text-2xl font-semibold">Material Request</h1>
 
+          {/* requestCode + underline (kept simple) */}
           <div className="relative inline-block mt-1">
-            <p className="font-mono text-sm text-muted-foreground">{requestCode}</p>
+            <p className="font-mono text-sm text-muted-foreground">{request.requestCode}</p>
             <span
               aria-hidden
               className="absolute left-0 -bottom-1 h-[2px] w-full rounded-full bg-emerald-400/80 shadow-[0_0_10px_rgba(57,255,20,0.35)]"
@@ -102,14 +74,14 @@ export default async function RequestDetailPage({ params }: Props) {
             <Link href="/requests/new">New Request</Link>
           </Button>
 
-          <AdminConfirmDeleteButton
-            label="Delete Request"
-            title="Delete Request"
-            description="Enter ADMIN password to permanently delete this request."
-            confirmText="Delete Request"
-            onConfirm={deleteRequest}
-            redirectTo="/requests"
-          />
+          <AdminConfirmButton
+  label="Delete"
+  confirmTitle="Delete request"
+  confirmText="This will permanently delete the request and all its items. This cannot be undone."
+  action={deleteRequestAction.bind(null, request.id)}
+  successRedirectTo="/requests"
+/>
+
         </div>
       </div>
 
@@ -150,36 +122,30 @@ export default async function RequestDetailPage({ params }: Props) {
                   <th className="px-3 py-2 w-[120px] text-left">Status</th>
                 </tr>
               </thead>
+
               <tbody>
                 {request.items.map((it) => (
                   <tr key={it.id} className="border-t">
                     <td className="px-3 py-2">{it.itemNumber}</td>
-                    <td className="px-3 py-2 font-mono text-xs">
-                      {it.material.sapPn}
-                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">{it.material.sapPn}</td>
                     <td className="px-3 py-2">{it.material.name}</td>
                     <td className="px-3 py-2">{it.quantity}</td>
                     <td className="px-3 py-2">{it.notes ?? "-"}</td>
                     <td className="px-3 py-2">
-                      <Badge
-                        variant={it.status === "COMPLETE" ? "success" : "secondary"}
-                      >
+                      <Badge variant={it.status === "COMPLETE" ? "success" : "secondary"}>
                         {it.status}
                       </Badge>
                     </td>
                   </tr>
                 ))}
 
-                {request.items.length === 0 && (
+                {request.items.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="px-3 py-10 text-center text-sm text-muted-foreground"
-                    >
-                      No items found for this request.
+                    <td colSpan={6} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                      No items found.
                     </td>
                   </tr>
-                )}
+                ) : null}
               </tbody>
             </table>
           </div>

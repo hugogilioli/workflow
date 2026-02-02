@@ -17,6 +17,14 @@ async function nextRequestCode() {
   return `WF-${String(n).padStart(6, "0")}`;
 }
 
+function parseFeet(v: unknown): number | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const n = parseFloat(s);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
 export async function createRequestAction(
   _prev: CreateRequestResult | null,
   formData: FormData
@@ -24,6 +32,9 @@ export async function createRequestAction(
   const projectSite = String(formData.get("projectSite") ?? "").trim();
   const requestedBy = String(formData.get("requestedBy") ?? "").trim();
   const teamName = String(formData.get("teamName") ?? "").trim();
+
+  const fiberFt = parseFeet(formData.get("fiberFt"));
+  const strandFt = parseFeet(formData.get("strandFt"));
 
   if (!projectSite || !requestedBy) {
     return { ok: false, message: "Project / Site and Requested by are required." };
@@ -78,6 +89,11 @@ export async function createRequestAction(
         requestedBy,
         teamId,
         date: new Date(),
+
+        // ✅ persist feet
+        fiberFt,
+        strandFt,
+
         items: {
           create: selected.map((it, idx) => ({
             itemNumber: idx + 1,

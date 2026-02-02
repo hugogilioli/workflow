@@ -1,51 +1,70 @@
-"use client";
-
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useActionState, useEffect } from "react";
-
-import { createMaterialAction } from "@/app/materials/actions";
-import type { ActionResult } from "@/lib/action-result";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/db";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const initialState: ActionResult | null = null;
-
 export default function NewMaterialPage() {
-  const router = useRouter();
-  const [state, formAction, pending] = useActionState(createMaterialAction, initialState);
+  async function createMaterialAction(formData: FormData) {
+    "use server";
 
-  useEffect(() => {
-    if (state?.ok) {
-      router.push("/materials");
-      router.refresh();
-    }
-  }, [state, router]);
+    const sapPn = String(formData.get("sapPn") ?? "").trim();
+    const name = String(formData.get("name") ?? "").trim();
+    const description = String(formData.get("description") ?? "").trim();
+    const unit = String(formData.get("unit") ?? "").trim();
+
+    const calcBasisRaw = String(formData.get("calcBasis") ?? "").trim();
+    const calcBasis = calcBasisRaw.length > 0 ? calcBasisRaw : null;
+
+    const calcFactorRaw = String(formData.get("calcFactor") ?? "").trim();
+    const calcFactor =
+      calcFactorRaw.length > 0 && Number.isFinite(parseFloat(calcFactorRaw))
+        ? parseFloat(calcFactorRaw)
+        : null;
+
+    const calcRounding = String(formData.get("calcRounding") ?? "CEIL").trim() || "CEIL";
+
+    if (!sapPn || !name) throw new Error("SAP PN and Name are required.");
+
+    await prisma.material.create({
+      data: {
+        sapPn,
+        name,
+        description: description || null,
+        unit: unit || null,
+        isActive: true,
+
+        // ✅ suggestion config
+        calcBasis: (calcBasis as any) || null,
+        calcFactor,
+        calcRounding: calcRounding as any,
+      },
+    });
+
+    redirect("/materials");
+  }
 
   return (
     <div className="mx-auto max-w-2xl p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Add Material</h1>
-          <p className="text-sm text-muted-foreground">Create a new item in your catalog.</p>
+          <p className="text-sm text-muted-foreground">
+            Create a new item in your catalog.
+          </p>
         </div>
+
         <Button variant="outline" asChild>
           <Link href="/materials">Back</Link>
         </Button>
       </div>
 
       <Card className="rounded-2xl">
-        <CardContent className="p-6">
-          <form action={formAction} className="space-y-5">
-            {state && !state.ok ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {state.message}
-              </div>
-            ) : null}
-
+        <CardContent className="p-6 space-y-6">
+          <form action={createMaterialAction} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="sapPn">SAP PN</Label>
               <Input id="sapPn" name="sapPn" placeholder="e.g. 8473921" />
@@ -66,10 +85,54 @@ export default function NewMaterialPage() {
               <Input id="unit" name="unit" placeholder="e.g. ea, ft, box" />
             </div>
 
-            <div className="pt-2 flex gap-3">
-              <Button type="submit" disabled={pending}>
-                {pending ? "Saving..." : "Save"}
-              </Button>
+            <div className="border-t pt-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold">Suggestion rule</h3>
+                <p className="text-xs text-muted-foreground">
+                  Used for Suggested Qty in New Request (based on Fiber/Strand feet).
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="calcBasis">Basis</Label>
+                  <select
+                    id="calcBasis"
+                    name="calcBasis"
+                    defaultValue=""
+                    className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="">(none)</option>
+                    <option value="FIBER_FT">FIBER_FT</option>
+                    <option value="STRAND_FT">STRAND_FT</option>
+                    <option value="TOTAL_FT">TOTAL_FT</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="calcFactor">Factor</Label>
+                  <Input id="calcFactor" name="calcFactor" placeholder="e.g. 0.02" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="calcRounding">Rounding</Label>
+                  <select
+                    id="calcRounding"
+                    name="calcRounding"
+                    defaultValue="CEIL"
+                    className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="CEIL">CEIL</option>
+                    <option value="ROUND">ROUND</option>
+                    <option value="FLOOR">FLOOR</option>
+                    <option value="NONE">NONE</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button type="submit">Save</Button>
               <Button type="button" variant="outline" asChild>
                 <Link href="/materials">Cancel</Link>
               </Button>

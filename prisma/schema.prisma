@@ -9,6 +9,7 @@ datasource db {
 
 enum Role {
   VIEWER
+  USER
   OPERATOR
   ADMIN
 }
@@ -102,7 +103,7 @@ model MaterialRequest {
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
-  // ✅ optional normalized project site
+  // ✅ optional normalized project site (opposite of ProjectSite.requests)
   projectSiteRefId String?
   projectSiteRef   ProjectSite? @relation(fields: [projectSiteRefId], references: [id])
 

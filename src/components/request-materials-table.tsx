@@ -34,11 +34,7 @@ function applyRounding(value: number, rounding: CalcRounding) {
   }
 }
 
-function computeSuggestedQty(
-  m: RequestMaterialRow,
-  fiberFt: number,
-  strandFt: number
-) {
+function computeSuggestedQty(m: RequestMaterialRow, fiberFt: number, strandFt: number) {
   if (!m.calcBasis || !m.calcFactor) return null;
 
   const base =
@@ -49,7 +45,6 @@ function computeSuggestedQty(
       : fiberFt + strandFt;
 
   const raw = base * m.calcFactor;
-
   const rounded = applyRounding(raw, m.calcRounding);
   const asInt = Number.isFinite(rounded) ? Math.max(0, Math.trunc(rounded)) : 0;
 
@@ -70,6 +65,8 @@ export function RequestMaterialsTable({ materials }: { materials: RequestMateria
     return Number.isFinite(n) ? n : 0;
   }, [strandFt]);
 
+  const total = useMemo(() => fiber + strand, [fiber, strand]);
+
   const suggestedMap = useMemo(() => {
     const map = new Map<string, number | null>();
     for (const m of materials) {
@@ -80,11 +77,12 @@ export function RequestMaterialsTable({ materials }: { materials: RequestMateria
 
   return (
     <div className="space-y-4">
-      {/* Feet inputs */}
+      {/* Feet inputs (✅ NOW submitted via name=...) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="space-y-2">
           <div className="text-sm font-medium">Fiber feet</div>
           <Input
+            name="fiberFt"
             inputMode="decimal"
             placeholder="e.g. 1200"
             value={fiberFt}
@@ -95,6 +93,7 @@ export function RequestMaterialsTable({ materials }: { materials: RequestMateria
         <div className="space-y-2">
           <div className="text-sm font-medium">Strand feet</div>
           <Input
+            name="strandFt"
             inputMode="decimal"
             placeholder="e.g. 8500"
             value={strandFt}
@@ -104,7 +103,7 @@ export function RequestMaterialsTable({ materials }: { materials: RequestMateria
 
         <div className="space-y-2">
           <div className="text-sm font-medium">Total feet</div>
-          <Input value={String(Math.round(fiber + strand))} disabled />
+          <Input value={String(Math.round(total))} disabled />
         </div>
       </div>
 
@@ -137,17 +136,13 @@ export function RequestMaterialsTable({ materials }: { materials: RequestMateria
                   <td className="px-3 py-2">
                     <div className="font-medium">{m.name}</div>
                     {m.description ? (
-                      <div className="text-xs text-muted-foreground">
-                        {m.description}
-                      </div>
+                      <div className="text-xs text-muted-foreground">{m.description}</div>
                     ) : null}
                   </td>
 
                   <td className="px-3 py-2">
                     {suggested === null ? (
-                      <span className="text-xs text-muted-foreground">
-                        —
-                      </span>
+                      <span className="text-xs text-muted-foreground">—</span>
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{suggested}</span>
@@ -156,7 +151,6 @@ export function RequestMaterialsTable({ materials }: { materials: RequestMateria
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            // fill qty input
                             const el = document.querySelector(
                               `input[name="q_${m.id}"]`
                             ) as HTMLInputElement | null;
@@ -170,12 +164,7 @@ export function RequestMaterialsTable({ materials }: { materials: RequestMateria
                   </td>
 
                   <td className="px-3 py-2">
-                    <Input
-                      name={`q_${m.id}`}
-                      type="number"
-                      min={0}
-                      placeholder="0"
-                    />
+                    <Input name={`q_${m.id}`} type="number" min={0} placeholder="0" />
                   </td>
 
                   <td className="px-3 py-2">
@@ -187,10 +176,7 @@ export function RequestMaterialsTable({ materials }: { materials: RequestMateria
 
             {materials.length === 0 ? (
               <tr>
-                <td
-                  colSpan={6}
-                  className="px-3 py-10 text-center text-sm text-muted-foreground"
-                >
+                <td colSpan={6} className="px-3 py-10 text-center text-sm text-muted-foreground">
                   No active materials found. Add materials first.
                 </td>
               </tr>
